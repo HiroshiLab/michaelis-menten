@@ -1,0 +1,225 @@
+---
+title: "michaelis-menten kinetics"
+author: "andrew hall"
+date: '2022-06-01'
+output: 
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(drc)
+library(gt)
+library(tidyverse)
+library(htmltidy)
+
+
+```
+
+```{r data workup, include=FALSE}
+#input specific reaction parameters here:
+
+#molecular mass of protein (in pmol/µg)
+mmass<-####
+#input amount of protein used in assay (in µg)
+protweight<-####
+#volume of individual reactions (in L)
+rxnvol<-####
+#time of assay (in s)
+assaytime<-900
+#slope of the calibration curve for measured product
+calcurveslope<-0.004894
+#y-intercept of the calibration curve for measured product
+calcurveyint<-0.088553
+
+#read csv file
+
+rawdata<-read_csv("DATAFILENAME.csv", col_names = TRUE)
+
+workeddata<-tibble(rawdata %>%
+#calculate concentration of product formed using calibration curve:
+  mutate(µM1=(abs1-calcurveyint)/calcurveslope,
+       µM2=(abs2-calcurveyint)/calcurveslope,
+       µM3=(abs3-calcurveyint)/calcurveslope) %>%
+#set 0 [substrate] equal to 0 [product] produced:  
+  mutate(adjµM1=µM1-min(µM1),
+         adjµM2=µM2-min(µM2),
+         adjµM3=µM3-min(µM3)) %>%
+#transform µM concentration into total µmol present in assay:   
+  mutate(µmol1=adjµM1*rxnvol,
+          µmol2=adjµM2*rxnvol,
+          µmol3=adjµM3*rxnvol) %>%
+#change unit from µmol to nmol
+  mutate(nmol1=µmol1*1000,
+         nmol2=µmol2*1000,
+         nmol3=µmol3*1000) %>%
+#calculate rate of reaction; 15 minute assay = 900 seconds
+  mutate(nmolrate1=nmol1/assaytime,
+         nmolrate2=nmol2/assaytime,
+         nmolrate3=nmol3/assaytime) %>%
+#change unit to pKat (pmol/s)
+  mutate(pkat1=nmolrate1*1000,
+         pkat2=nmolrate2*1000,
+         pkat3=nmolrate3*1000) %>%
+#calculate reaction velocity per mass enzyme (0.5µg used per reaction)
+  mutate(v1=pkat1/protweight,
+         v2=pkat2/protweight,
+         v3=pkat3/protweight))
+
+#separate into individual data frames per replicate
+rep1<-tibble(s=workeddata$s, v=workeddata$v1)
+
+rep2<-tibble(s=workeddata$s, v=workeddata$v2)
+
+rep3<-tibble(s=workeddata$s, v=workeddata$v3)
+
+
+```
+## Kinetics Model
+```{r model data, echo=FALSE}
+model1<-drm(v~s, data=rep1, fct=MM.2(names=c("vmax", "km")))
+
+model2<-drm(v~s, data=rep2, fct=MM.2(names=c("vmax", "km")))
+
+model3<-drm(v~s, data=rep3, fct=MM.2(names=c("vmax", "km")))
+
+summary(model1)
+summary(model2)
+summary(model3)
+
+fit1<-data.frame(s=seq(0, max(rep1$s), length.out=1000))
+fit1$v=predict(model1, newdata=fit1)
+
+fit2<-data.frame(s=seq(0, max(rep2$s), length.out=1000))
+fit2$v=predict(model2, newdata=fit2)
+
+fit3<-data.frame(s=seq(0, max(rep3$s), length.out=1000))
+fit3$v=predict(model3, newdata=fit3)
+
+
+vmax<-c(coef(model1)[1], coef(model2)[1], coef(model3)[1])
+km<-c(coef(model1)[2], coef(model2)[2], coef(model3)[2])
+
+parameters<-tibble(.=c("rep1","rep2", "rep3"),km=km,vmax=vmax)
+
+parameters<-parameters%>%
+  mutate(kcat=vmax/mmass)%>%
+  mutate(cat_effic=kcat/km)
+  
+
+gt_parameters<-gt(parameters)
+
+gt_parameters<-
+  gt_parameters%>%
+  tab_header(
+    title="Kinetic Parameters for ENZYME",
+    subtitle="subtitle")%>%
+  cols_label(
+    km="Km (µM)", 
+    vmax="vmax (pkat/µg)", 
+    kcat=html("kcat (s<sup>-1</sup>)"), 
+    cat_effic=html("kcat/Km (s<sup>-1</sup>µM<sup>-1</sup>)"))
+gt_parameters
+
+
+param_means<-tibble(km=mean(parameters$km), vmax=mean(parameters$vmax), kcat=mean(parameters$kcat), cat_effic=mean(parameters$cat_effic))
+
+gt_param_means<-gt(param_means)
+
+gt_param_means<-
+  gt_param_means%>%
+  tab_header(
+    title="Mean Kinetic Parameters for ENZYME")%>%
+  cols_label(
+    km="Km (µM)",
+    vmax="vmax (pkat/µg)", 
+    kcat=html("kcat (s<sup>-1</sup>)"), 
+    cat_effic=html("kcat/Km (s<sup>-1</sup>µM<sup>-1</sup>)"))
+gt_param_means
+  
+```
+
+## Replicate Kinetics Plots
+```{r visualize kinetics plots, echo=FALSE}
+
+ggplot()+
+  geom_point(data=rep1, aes(x=s, y=v), shape=18, size=2)+
+  geom_line(data=fit1, aes(x=s, y=v), color="forest green")+
+  xlab("[s] (µM)")+
+  ylab("velocity (pkat/µg)")+
+  ggtitle("ENZYME replicate 1")+
+  theme(
+    panel.background = element_rect(fill ="grey95"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color="black")
+  )
+  
+ggplot()+
+  geom_point(data=rep2, aes(x=s, y=v), shape=18, size=2)+
+  geom_line(data=fit2, aes(x=s, y=v), color="forest green")+
+  xlab("[s] (µM)")+
+  ylab("velocity (pkat/µg)")+
+  ggtitle("ENZYME replicate 2")+
+  theme(
+    panel.background = element_rect(fill ="grey95"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color="black")
+  )
+
+ggplot()+
+  geom_point(data=rep3, aes(x=s, y=v), shape=18, size=2)+
+  geom_line(data=fit3, aes(x=s, y=v), color="forest green")+
+  xlab("[s] (µM)")+
+  ylab("velocity (pkat/µg)")+
+  ggtitle("ENZYME replicate 3")+
+  theme(
+    panel.background = element_rect(fill ="grey95"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color="black")
+  )
+
+
+```
+
+## Final Mean Kinetics Plots
+```{r final mean kinetics plot, dpi=1000, echo=FALSE}
+
+equation=function(s){param_means$vmax*s/(param_means$km+s)}
+
+cleandata<-
+  workeddata%>%
+  dplyr::select(s, v1, v2, v3)%>%
+  rowwise%>%
+  mutate(mean=mean(c_across(v1:v3)))%>%
+  rowwise%>%
+  mutate(sd=sd(c_across(v1:v3)))%>%
+  dplyr::select(s, mean, sd)
+  
+colnames(cleandata)<-c("s", "v", "sd")
+
+finalplot<-
+  ggplot(cleandata)+
+  geom_point(aes(x=s, y=v), shape=18)+
+  geom_errorbar(aes(x=s, y=v, ymin=v-sd, ymax=v+sd))+
+  geom_function(fun=equation, aes(x=s, y=v), color="forest green")+
+  xlab("[s] (µM)")+
+  ylab("velocity (pkat/µg)")+
+  ggtitle("Michaelis-Menten Kinetics of ENZYME")+
+  theme(
+    panel.background = element_rect(fill ="grey95"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.line = element_line(color="black")
+  )
+
+
+finalplot
+
+
+```
