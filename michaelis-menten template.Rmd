@@ -29,11 +29,11 @@ protweight<-####
 #volume of individual reactions (in L)
 rxnvol<-####
 #time of assay (in s)
-assaytime<-900
+assaytime<-####
 #slope of the calibration curve for measured product
-calcurveslope<-0.004894
+calcurveslope<-####
 #y-intercept of the calibration curve for measured product
-calcurveyint<-0.088553
+calcurveyint<-####
 
 #read csv file
 
