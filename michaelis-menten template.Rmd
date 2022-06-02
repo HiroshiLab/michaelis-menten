@@ -143,7 +143,7 @@ gt_param_means
 ```
 
 ## Replicate Kinetics Plots
-```{r visualize kinetics plots, echo=FALSE}
+```{r visualize kinetics plots, echo=FALSE, dpi=1000}
 
 ggplot()+
   geom_point(data=rep1, aes(x=s, y=v), shape=18, size=2)+
