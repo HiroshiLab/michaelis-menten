@@ -6,4 +6,4 @@ This script uses the drc package (Ritz and Streibig 2005), and can extract Micha
 Ritz, C. and Streibig, J.C. (2005) Bioassay Analysis Using R. Journal of Statistical Software, 12, 1 - 22.
 
 
-Contact Andrew (aghall@wisc.edu or aghall@student.ubc.ca for questions or help using the template!)
+Contact Drew (drew.hall@botany.ubc.ca for questions or help using the template!)
